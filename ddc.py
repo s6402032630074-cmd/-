@@ -128,7 +128,7 @@ def color_status(val):
     return f'color: {color}; font-weight: bold'
 
 formatted_df = res_df[['Pile_ID', 'deviation_mm', 'reaction', 'pile_moment_tm', 'status']]
-st.dataframe(formatted_df.style.applymap(color_status, subset=['status']), use_container_width=True)
+st.dataframe(formatted_df.style.map(color_status, subset=['status']), use_container_width=True)
 
 # Warnings
 st.divider()
