@@ -14,7 +14,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- COORDINATE GENERATOR (เพิ่มจากเวอร์ชัน Pro เพื่อไม่ให้พังเวลาเพิ่มจำนวนเข็ม) ---
+# --- COORDINATE GENERATOR ---
 def make_default_coords(n: int):
     if n == 1:
         return [0.0], [0.0], [0.0], [0.0]
@@ -39,9 +39,9 @@ def make_default_coords(n: int):
 
 # --- CORE ENGINEERING FUNCTIONS ---
 def calculate_piles(p_load, mx_load, my_load, swl, piles_df):
-    df = piles_df.copy() # Fix: ทำงานบน Copy เพื่อป้องกัน Error
+    df = piles_df.copy()
     
-    # 1. คำนวณค่าเยื้องศูนย์ของกลุ่ม (Global Eccentricity)
+    # 1. คำนวณหาจุดศูนย์ถ่วงกลุ่มเข็มใหม่ (New Centroid)
     x_bar = df['x_actual'].mean()
     y_bar = df['y_actual'].mean()
     
@@ -58,11 +58,11 @@ def calculate_piles(p_load, mx_load, my_load, swl, piles_df):
     sum_y2 = (df['dy']**2).sum()
     n = len(df)
     
-    # Fix: ป้องกันการหารด้วยศูนย์ (Divide by Zero)
+    # ป้องกันการหารด้วยศูนย์
     safe_sum_x2 = sum_x2 if sum_x2 > 1e-12 else 1e-12
     safe_sum_y2 = sum_y2 if sum_y2 > 1e-12 else 1e-12
     
-    # 5. Individual Pile Reactions (Formula: R = P/n + My*x/Ix + Mx*y/Iy)
+    # 5. Individual Pile Reactions 
     df['reaction'] = (p_load / n) + (mx_total * df['dy'] / safe_sum_y2) + (my_total * df['dx'] / safe_sum_x2)
     
     # 6. Structural Integrity Checks
@@ -95,10 +95,8 @@ col_input, col_viz = st.columns([1, 1])
 
 with col_input:
     st.subheader("📍 Pile Coordinates Configuration")
-    # Fix: บังคับให้เป็น int
     num_piles = int(st.number_input("จำนวนเสาเข็มในกลุ่ม", min_value=1, max_value=24, value=4))
     
-    # ใช้ระบบสร้างพิกัดอัตโนมัติ
     dx, dy, ax, ay = make_default_coords(num_piles)
     default_data = {
         "Pile_ID": [f"P{i+1}" for i in range(num_piles)],
@@ -123,7 +121,6 @@ with col_viz:
     fig.add_trace(go.Scatter(x=res_df['x_design'], y=res_df['y_design'], mode='markers',
                              marker=dict(size=12, color='lightgray', symbol='x'), name='Design'))
     
-    # Fix: ขนาดจุดต้องไม่ติดลบ (ป้องกัน Plotly Error เวลามีแรง Uplift)
     marker_sizes = [max(abs(r) * 0.8, 8) for r in res_df['reaction']]
     
     # Actual Positions (Color by Reaction)
@@ -139,6 +136,9 @@ with col_viz:
     # Column Center (0,0)
     fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=15, color='red', symbol='cross'), name='Col Center'))
     
+    # New Centroid (CG)
+    fig.add_trace(go.Scatter(x=[ex], y=[ey], mode='markers', marker=dict(size=12, color='orange', symbol='diamond'), name='New CG'))
+    
     fig.update_layout(template="plotly_white", height=500, xaxis_title="X-Axis (m)", yaxis_title="Y-Axis (m)",
                       yaxis=dict(scaleanchor="x", scaleratio=1))
     st.plotly_chart(fig, use_container_width=True)
@@ -152,6 +152,28 @@ c2.metric("Global Eccentricity Y", f"{ey*1000:.1f} mm")
 c3.metric("Total Moment Mx", f"{mxt:.2f} t-m")
 c4.metric("Total Moment My", f"{myt:.2f} t-m")
 
+# --- แสดงวิธีทำ การหา Centroid ใหม่ ---
+st.markdown("---")
+st.subheader("📝 แสดงวิธีทำ: การหาจุดศูนย์ถ่วงใหม่ (New Centroid)")
+st.markdown("คำนวณจากสูตรค่าเฉลี่ยพิกัดเสาเข็มที่ตอกจริงเทียบกับศูนย์กลางเสา (ตามหลักการ $\\bar{X} = \\frac{\\sum x}{n}$)")
+
+# สร้างข้อความสำหรับแสดงสมการ
+n_count = len(res_df)
+if n_count <= 6:
+    x_str = " + ".join([f"({x:.3f})" for x in res_df['x_actual']])
+    y_str = " + ".join([f"({y:.3f})" for x in res_df['y_actual']])
+else:
+    # ถ้าเข็มเยอะเกินไปให้ใช้ ... เพื่อไม่ให้สมการล้นจอ
+    x_str = f"({res_df['x_actual'].iloc[0]:.3f}) + ... + ({res_df['x_actual'].iloc[-1]:.3f})"
+    y_str = f"({res_df['y_actual'].iloc[0]:.3f}) + ... + ({res_df['y_actual'].iloc[-1]:.3f})"
+
+col_cx, col_cy = st.columns(2)
+with col_cx:
+    st.latex(r"\bar{X} = \frac{" + x_str + r"}{" + str(n_count) + r"} = " + f"{ex:.4f} \\text{{ m}}")
+with col_cy:
+    st.latex(r"\bar{Y} = \frac{" + y_str + r"}{" + str(n_count) + r"} = " + f"{ey:.4f} \\text{{ m}}")
+st.markdown("---")
+
 # Detailed Table with Highlighting
 st.subheader("Detailed Reaction Results")
 
@@ -160,7 +182,6 @@ def color_status(val):
     return f'color: {color}; font-weight: bold'
 
 formatted_df = res_df[['Pile_ID', 'deviation_mm', 'reaction', 'pile_moment_tm', 'status']]
-# Fix: เปลี่ยนจาก applymap เป็น map ตาม Pandas เวอร์ชันใหม่
 st.dataframe(formatted_df.style.map(color_status, subset=['status']), use_container_width=True)
 
 # Warnings
