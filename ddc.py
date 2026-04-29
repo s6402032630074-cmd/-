@@ -119,7 +119,7 @@ with col_viz:
     fig = go.Figure()
     # Design Positions (Gray)
     fig.add_trace(go.Scatter(x=res_df['x_design'], y=res_df['y_design'], mode='markers',
-                             marker=dict(size=12, color='lightgray', symbol='x'), name='Design'))
+                             marker=dict(size=12, color='lightgray', symbol='x'), name='ตำแหน่งออกแบบ'))
     
     marker_sizes = [max(abs(r) * 0.8, 8) for r in res_df['reaction']]
     
@@ -131,16 +131,21 @@ with col_viz:
                                          colorscale='Viridis', 
                                          showscale=True,
                                          colorbar=dict(title="Reaction (t)")),
-                             name='As-Built'))
+                             name='ตำแหน่งตอกจริง'))
     
-    # Column Center (0,0)
-    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', marker=dict(size=15, color='red', symbol='cross'), name='Col Center'))
+    # Column Center (Original Centroid)
+    fig.add_trace(go.Scatter(x=[0], y=[0], mode='markers', 
+                             marker=dict(size=15, color='red', symbol='cross'), 
+                             name='จุดศูนย์ถ่วงเดิม (0,0)'))
     
     # New Centroid (CG)
-    fig.add_trace(go.Scatter(x=[ex], y=[ey], mode='markers', marker=dict(size=12, color='orange', symbol='diamond'), name='New CG'))
+    fig.add_trace(go.Scatter(x=[ex], y=[ey], mode='markers', 
+                             marker=dict(size=12, color='orange', symbol='diamond'), 
+                             name='จุดศูนย์ถ่วงใหม่ (New CG)'))
     
     fig.update_layout(template="plotly_white", height=500, xaxis_title="X-Axis (m)", yaxis_title="Y-Axis (m)",
-                      yaxis=dict(scaleanchor="x", scaleratio=1))
+                      yaxis=dict(scaleanchor="x", scaleratio=1),
+                      legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
     st.plotly_chart(fig, use_container_width=True)
 
 # Results Display
@@ -154,8 +159,10 @@ c4.metric("Total Moment My", f"{myt:.2f} t-m")
 
 # --- แสดงวิธีทำ การหา Centroid ใหม่ ---
 st.markdown("---")
-st.subheader("📝 แสดงวิธีทำ: การหาจุดศูนย์ถ่วงใหม่ (New Centroid)")
-st.markdown("คำนวณจากสูตรค่าเฉลี่ยพิกัดเสาเข็มที่ตอกจริงเทียบกับศูนย์กลางเสา (ตามหลักการ $\\bar{X} = \\frac{\\sum x}{n}$)")
+st.subheader("📝 แสดงวิธีทำ: การหาจุดศูนย์ถ่วง (Centroid)")
+st.markdown("""
+กำหนดให้ **จุดศูนย์ถ่วงเดิม (Original Centroid)** หรือแกนกลางเสาตอม่อ อยู่ที่พิกัดอ้างอิง **(0, 0)** คำนวณหา **จุดศูนย์ถ่วงใหม่ (New Centroid)** จากค่าเฉลี่ยพิกัดเสาเข็มที่ตอกจริงเทียบกับจุด (0,0)
+""")
 
 # สร้างข้อความสำหรับแสดงสมการ
 n_count = len(res_df)
@@ -172,6 +179,8 @@ with col_cx:
     st.latex(r"\bar{X} = \frac{" + x_str + r"}{" + str(n_count) + r"} = " + f"{ex:.4f} \\text{{ m}}")
 with col_cy:
     st.latex(r"\bar{Y} = \frac{" + y_str + r"}{" + str(n_count) + r"} = " + f"{ey:.4f} \\text{{ m}}")
+
+st.info(f"📍 **สรุป:** จุดศูนย์ถ่วงของกลุ่มเสาเข็มขยับจากจุดเดิม **(0.000, 0.000)** เปลี่ยนเป็นจุดใหม่ที่ **({ex:.4f}, {ey:.4f})**")
 st.markdown("---")
 
 # Detailed Table with Highlighting
