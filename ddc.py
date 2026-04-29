@@ -223,47 +223,14 @@ html, body, [class*="css"] {
 """, unsafe_allow_html=True)
 
 # ─────────────────────────────────────────────────────────────
-#  BUG-FIX NOTES (สรุปจุดบกพร่องที่แก้ไข)
-#
-#  BUG 1: calculate_piles() แก้ไข DataFrame in-place โดยไม่ .copy()
-#          → ทำให้เกิด SettingWithCopyWarning และผลลัพธ์อาจผิดพลาด
-#          FIX: ใช้ df.copy() ก่อนเสมอ
-#
-#  BUG 2: sum_x2 หรือ sum_y2 อาจเป็น 0 (เสาเข็มทั้งหมดอยู่แนวเดียวกัน)
-#          → ทำให้เกิด ZeroDivisionError
-#          FIX: ตรวจสอบและ guard division ด้วย max(val, 1e-12)
-#
-#  BUG 3: marker size = reaction * 0.8 ทำให้ size ติดลบถ้ามีแรงดึง (Uplift)
-#          → Plotly crash หรือ marker ไม่แสดง
-#          FIX: marker size = abs(reaction) * scale, clamp ≥ 5
-#
-#  BUG 4: applymap() deprecated ตั้งแต่ pandas 2.1+ (ควรใช้ map())
-#          FIX: ใช้ .map() แทน .applymap()
-#
-#  BUG 5: num_piles เป็น float จาก number_input → range() crash
-#          FIX: int(num_piles) ทุกที่ที่ใช้
-#
-#  BUG 6: Default lists สำหรับ x_design, y_design ฯลฯ ไม่ scale
-#          ตาม num_piles > 4 → IndexError / list ขนาดผิด
-#          FIX: สร้าง default ด้วย logic ที่ scale ได้ถูกต้อง
-#
-#  BUG 7: Calculation ทำงานก่อน with col_viz: block เสร็จ
-#          → visualization block อ่าน res_df ก่อนคำนวณ (โชคดีว่า
-#          Python อ่าน sequential แต่ logic ยากติดตาม)
-#          FIX: จัดลำดับ flow ให้ชัดเจน ใช้ session_state
-# ─────────────────────────────────────────────────────────────
-
-# ─────────────────────────────────────────────────────────────
 #  ENGINEERING ENGINE (BUG-FIXED)
 # ─────────────────────────────────────────────────────────────
 def calculate_piles(p_load: float, mx_load: float, my_load: float,
                     swl: float, piles_df: pd.DataFrame):
     """
     คำนวณแรงปฏิกิริยาในเสาเข็มกรณีเยื้องศูนย์ (SDM)
-
     สูตร: R_i = P/n + Mx_total·dy_i/Σdy² + My_total·dx_i/Σdx²
     """
-    # ── BUG FIX 1: ทำงานกับ copy เสมอ ──
     df = piles_df.copy()
 
     # ── 1. จุดศูนย์กลางกลุ่มเสาเข็มจริง (CG of actual piles) ──
@@ -283,7 +250,7 @@ def calculate_piles(p_load: float, mx_load: float, my_load: float,
     sum_dy2 = (df['dy'] ** 2).sum()
     n = len(df)
 
-    # ── BUG FIX 2: Guard ZeroDivisionError เมื่อเสาเข็มอยู่แนวเดียวกัน ──
+    # ── Guard ZeroDivisionError เมื่อเสาเข็มอยู่แนวเดียวกัน ──
     safe_sum_dx2 = sum_dx2 if sum_dx2 > 1e-12 else 1e-12
     safe_sum_dy2 = sum_dy2 if sum_dy2 > 1e-12 else 1e-12
 
@@ -380,7 +347,6 @@ with st.sidebar:
     tolerance  = st.number_input("Tolerance ระยะเยื้องศูนย์ (mm)", min_value=0.0, value=75.0, step=5.0)
 
     st.markdown('<div style="font-size:0.72rem;color:#00d4ff;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:0.8rem 0 0.3rem;">📐 กลุ่มเสาเข็ม</div>', unsafe_allow_html=True)
-    # ── BUG FIX 5: บังคับ int ──
     num_piles = int(st.number_input("จำนวนเสาเข็ม", min_value=2, max_value=24, value=4, step=1))
 
     st.markdown("")
@@ -431,7 +397,6 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────
 st.markdown('<div class="sec-head"><span>📍</span><h3>พิกัดเสาเข็ม — ตำแหน่งออกแบบ vs ตอกจริง</h3></div>', unsafe_allow_html=True)
 
-# ── BUG FIX 6: Default data generator ที่ scale ถูกต้อง ──
 dx, dy, ax, ay = make_default_coords(num_piles)
 
 default_data = {
@@ -533,8 +498,6 @@ if calc_btn or st.session_state.get('calculated'):
         col_v1, col_v2 = st.columns([1.3, 1])
 
         with col_v1:
-            # ── Plan view (Plotly) ──
-            # BUG FIX 3: marker size ต้องบวกเสมอ
             def safe_size(reactions, scale=2.5, base=12):
                 return [max(abs(r) * scale + base, 6) for r in reactions]
 
@@ -543,7 +506,6 @@ if calc_btn or st.session_state.get('calculated'):
                 "OVERLOAD": "#ff3d57",
                 "UPLIFT":   "#ffab00",
             }
-            marker_colors = [status_colors.get(s, "#aaa") for s in res_df['status']]
 
             fig_plan = go.Figure()
 
