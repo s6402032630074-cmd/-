@@ -168,7 +168,7 @@ st.markdown("""
 n_count = len(res_df)
 if n_count <= 6:
     x_str = " + ".join([f"({x:.3f})" for x in res_df['x_actual']])
-    y_str = " + ".join([f"({y:.3f})" for x in res_df['y_actual']])
+    y_str = " + ".join([f"({y:.3f})" for y in res_df['y_actual']])
 else:
     # ถ้าเข็มเยอะเกินไปให้ใช้ ... เพื่อไม่ให้สมการล้นจอ
     x_str = f"({res_df['x_actual'].iloc[0]:.3f}) + ... + ({res_df['x_actual'].iloc[-1]:.3f})"
