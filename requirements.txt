@@ -1,4 +1,4 @@
-streamlit
-pandas
+easyocr
+pillow
 numpy
-plotly
+opencv-python-headless
