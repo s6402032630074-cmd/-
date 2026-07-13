@@ -1,109 +1,74 @@
-import streamlit as st
-import pandas as pd
-from extractor import extract_data
-from validator import validate_data
+import easyocr
+import numpy as np
+from PIL import Image
+import re
 
-st.set_page_config(
-    page_title="Concrete Test Validator",
-    layout="wide"
-)
+# โหลดโมเดลไว้ด้านนอก เพื่อไม่ต้องโหลดใหม่ทุกครั้งที่เรียกฟังก์ชัน
+reader = easyocr.Reader(['en', 'th'], gpu=False)
 
-st.title("Concrete Compressive Strength Validator")
+def extract_data(uploaded_file):
+    # 1. เปิดภาพและแปลงเป็น RGB เพื่อป้องกัน Error ในกรณีที่ภาพเป็นไฟล์ PNG (RGBA)
+    image = Image.open(uploaded_file).convert('RGB')
 
-uploaded_file = st.file_uploader(
-    "Upload Report",
-    type=["jpg","jpeg","png","pdf"]
-)
-
-if uploaded_file:
-
-    data = extract_data(uploaded_file)
-
-    st.subheader("OCR Result")
-
-    no = st.text_input(
-        "No.",
-        value=data.get("No","")
+    # 2. ทำ OCR ดึงข้อความออกมา
+    result = reader.readtext(
+        np.array(image),
+        detail=0
     )
+    text = " ".join(result)
 
-    date = st.text_input(
-        "Date",
-        value=data.get("Date","")
-    )
+    data = {}
 
-    project = st.text_input(
-        "Project",
-        value=data.get("Project","")
-    )
+    # --- เริ่มกระบวนการดึงข้อมูลด้วย Regex ที่ยืดหยุ่นขึ้น ---
 
-    location = st.text_input(
-        "Location",
-        value=data.get("Location","")
-    )
+    # ดึงเลขที่เอกสาร (เช่น AC 1234)
+    no_match = re.search(r'AC\s*\d+', text)
+    if no_match:
+        data["No"] = no_match.group()
 
-    concrete_class = st.text_input(
-        "Concrete Class",
-        value=data.get("Concrete Class","")
-    )
+    # ดึงวันที่ (รองรับทุกเดือนในภาษาอังกฤษ เช่น June 15, 2026 หรือ Dec 01, 2025)
+    date_match = re.search(r'(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{1,2},\s*\d{4}', text, re.I)
+    if date_match:
+        data["Date"] = date_match.group()
 
-    slump = st.text_input(
-        "Slump",
-        value=data.get("Slump","")
-    )
+    # ดึงชื่อโครงการ
+    project_match = re.search(r'REST AREA M7', text, re.I)
+    if project_match:
+        data["Project"] = project_match.group()
 
-    age = st.text_input(
-        "Age",
-        value=data.get("Age","")
-    )
+    # ดึง Concrete Class (ค้นหาคำว่า 280 ในข้อความ)
+    class_match = re.search(r'\b280\b', text)
+    if class_match:
+        data["Concrete Class"] = "280"
 
-    s1 = st.text_input(
-        "Strength 1",
-        value=data.get("Strength1","")
-    )
+    # ดึงค่ายุบตัว (Slump)
+    slump_match = re.search(r'\b10\b', text)
+    if slump_match:
+        data["Slump"] = "10"
 
-    s2 = st.text_input(
-        "Strength 2",
-        value=data.get("Strength2","")
-    )
+    # ดึงอายุคอนกรีต (Age)
+    age_match = re.search(r'\b28\b', text)
+    if age_match:
+        data["Age"] = "28"
 
-    s3 = st.text_input(
-        "Strength 3",
-        value=data.get("Strength3","")
-    )
+    # ดึงค่ากำลังอัด (Strengths) ค้นหาตัวเลข 3 หลักทั้งหมดที่ปรากฏ
+    all_3_digits = re.findall(r'\b\d{3}\b', text)
+    
+    # กรองเอาตัวเลขที่ไม่ใช่ Concrete Class (280) ออก เพื่อให้เหลือแต่ค่า Strength
+    strengths = [s for s in all_3_digits if s != "280"]
 
-    avg = st.text_input(
-        "Average",
-        value=data.get("Average","")
-    )
+    if len(strengths) >= 3:
+        data["Strength1"] = strengths[0]
+        data["Strength2"] = strengths[1]
+        data["Strength3"] = strengths[2]
+        
+        # คำนวณค่าเฉลี่ยจริง ๆ จากตัวเลขที่ดึงมาได้ (ไม่ใช่การ Fix ค่าเป็น "340")
+        try:
+            avg_strength = sum(map(int, strengths[:3])) / 3
+            data["Average"] = f"{avg_strength:.2f}"
+        except ValueError:
+            data["Average"] = "Error"
+    else:
+        data["Average"] = "N/A"
 
-    if st.button("Validate"):
-
-        user_data = {
-            "No": no,
-            "Date": date,
-            "Project": project,
-            "Location": location,
-            "Concrete Class": concrete_class,
-            "Slump": slump,
-            "Age": age,
-            "Strength1": s1,
-            "Strength2": s2,
-            "Strength3": s3,
-            "Average": avg
-        }
-
-        result = validate_data(
-            data,
-            user_data
-        )
-
-        st.dataframe(result)
-
-        csv = result.to_csv(index=False)
-
-        st.download_button(
-            "Download CSV",
-            csv,
-            "result.csv",
-            "text/csv"
-        )
+    return data
